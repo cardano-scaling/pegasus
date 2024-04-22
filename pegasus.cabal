@@ -1,0 +1,41 @@
+cabal-version:   3.4
+name:            pegasus
+version:         0.1.0
+synopsis:        Fast, one-click, seeded devnet for Cardano
+license:         Apache-2.0
+license-file:    LICENSE
+author:          Sebastian Nagel
+maintainer:      sebastian.nagel@ncoding.at
+copyright:       2024 Sebastian Nagel
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
+common project-config
+  default-language: GHC2021
+  ghc-options:
+    -Werror -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wunused-packages
+    -fprint-potential-instances
+
+library
+  import:          project-config
+  exposed-modules: Pegasus
+  build-depends:   base ^>=4.18.1.0
+  hs-source-dirs:  src
+
+executable pegasus
+  import:         project-config
+  hs-source-dirs: exe
+  main-is:        Main.hs
+  build-depends:
+    , base     ^>=4.18.1.0
+    , pegasus
+
+test-suite pegasus-test
+  import:         project-config
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  build-depends:
+    , base     ^>=4.18.1.0
+    , pegasus

@@ -1,0 +1,6 @@
+# Direnv cache
+.direnv/
+
+# Created artifacts
+result
+/cabal.project.local
