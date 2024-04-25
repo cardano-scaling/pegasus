@@ -4,5 +4,5 @@ import Pegasus qualified
 
 main :: IO ()
 main = do
-  putStrLn "Hello, Haskell!"
-  Pegasus.someFunc
+  Pegasus.startDevnetNode
+  putStrLn "TODO: should seed the network"
