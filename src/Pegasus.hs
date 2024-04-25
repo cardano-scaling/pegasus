@@ -1,8 +1,9 @@
 module Pegasus where
 
-import Control.Concurrent (threadDelay)
+import Pegasus.CardanoNode (getCardanoNodeVersion)
 
 startDevnetNode :: IO ()
 startDevnetNode = do
-  threadDelay 50_000
+  v <- getCardanoNodeVersion
+  putStrLn $ "Using " <> v
   putStrLn "TODO: should start a devnet node"
