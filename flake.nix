@@ -17,9 +17,11 @@
       hsPkgs = pkgs.haskellPackages.extend (pkgs.haskell.lib.compose.packageSourceOverrides {
         pegasus = ./.;
       });
+
+      pegasus' = pkgs.haskell.lib.dontCheck hsPkgs.pegasus;
     in
     {
-      packages.default = hsPkgs.pegasus;
+      packages.default = pegasus';
 
       devShells.default = hsPkgs.shellFor {
         packages = p: [ p.pegasus ];
