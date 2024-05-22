@@ -18,13 +18,19 @@ Pegasus, the flying horse from greek mythology should get you off the ground qui
 
 When developing applications and tools for Cardano, the need for a fast and deterministic sandbox environment in which to experiment with transactions running on-chain validators or run fast integration tests for off- and on-chain code arises quickly.
 
+The principles and goals of this project are:
+
+- Fast startup & teardown (< 1 second)
+- Single binary installation on all platforms (< 5 min setup)
+- Usable from the terminal and any application framework (command line options + files as interfaces)
+
 ## Use pegasus instead of
 
 - `cardano-node` directly, when you don't want to bother with configuring and seeding a local node manually. Pegasus can also be used to scaffold a full `cardano-node` configuration and seeded network which can later be used by any compatible `cardano-node`.
 
-- `cardano-testnet`: TODO
+- `plutip`: if you prefer downloading a single binary over using `nix`.
 
-- `yaci-devkit`, when you need faster startup and not want docker containers but plain sub-processes.
+- `yaci-devkit`, when you need faster startup or not want docker containers but plain sub-processes.
 
 ## Installation
 
@@ -58,6 +64,12 @@ Or install `GHC` and `cabal` (e.g. using [GHCup](https://www.haskell.org/ghcup/)
 ```sh
 cabal run
 ```
+
+### How it works
+
+- Similar like other devnet tools, `pegasus` sets up a local cluster of `cardano-node`s
+- A key difference is, that it comes with a `cardano-node` binary embedded
+- Both `pegasus` and the included `cardano-node` are statically linked and have no or minimal dependencies
 
 ### TODO
 - [ ] Fill TODOs in readme
