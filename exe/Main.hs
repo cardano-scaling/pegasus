@@ -1,8 +1,19 @@
 module Main where
 
+import Control.Concurrent (threadDelay)
+import Control.Monad (forever)
 import Pegasus qualified
+import System.IO (BufferMode (..), hSetBuffering, stdout)
+import Text.Pretty.Simple (pPrint)
 
 main :: IO ()
 main = do
-  Pegasus.startDevnetNode
-  putStrLn "TODO: should seed the network"
+  -- NOTE: Allow for continous consumption of stdout
+  hSetBuffering stdout NoBuffering
+  Pegasus.withCardanoNodeDevnet "." $ \runningNode -> do
+    putStrLn "Started devnet"
+    pPrint runningNode
+    putStrLn "TODO: should seed the network"
+    forever $ do
+      putStr "."
+      threadDelay 100_000
