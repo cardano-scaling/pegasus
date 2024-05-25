@@ -11,9 +11,7 @@ main = do
   -- NOTE: Allow for continous consumption of stdout
   hSetBuffering stdout NoBuffering
   Pegasus.withCardanoNodeDevnet "tmp-pegasus" $ \runningNode -> do
-    putStrLn "Started devnet"
     pPrint runningNode
     putStrLn "TODO: should seed the network"
     forever $ do
-      putStr "."
-      threadDelay 100_000
+      threadDelay 1_000_000

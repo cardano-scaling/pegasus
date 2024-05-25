@@ -1,7 +1,7 @@
 module Pegasus where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), SocketPath)
-import Control.Monad (unless, (>=>))
+import Control.Monad ((>=>))
 import Data.Aeson (FromJSON, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
@@ -13,14 +13,16 @@ import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Lens.Micro (at, (?~))
 import Lens.Micro.Aeson (_Object)
-import Pegasus.CardanoNode (CardanoNodeArgs (..), defaultCardanoNodeArgs, getCardanoNodeVersion)
+import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCardanoNodeArgs, getCardanoNodeVersion)
 import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, removeDirectoryRecursive)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
 import System.FilePath ((</>))
-import System.Posix (ownerReadMode, setFileMode)
 
+import Data.Foldable (for_)
 import Paths_pegasus qualified as Pkg
+import System.Posix (ownerReadMode, setFileMode)
+import System.Process.Typed (withProcessTerm)
 import Text.Pretty.Simple (pPrint)
 
 data RunningNode = RunningNode
@@ -47,15 +49,16 @@ withCardanoNodeDevnet dir cont = do
     Just fp -> putStrLn $ "Using cardano-node: " <> fp
   nodeVersion <- getCardanoNodeVersion
   args <- setupCardanoDevnet dir
-  putStrLn "TODO: should start a devnet node using"
-  pPrint args
-  cont
-    RunningNode
-      { nodeVersion
-      , nodeSocket = "TODO/node.socket"
-      , networkId = Testnet (NetworkMagic 11111)
-      , blockTime = 20
-      }
+  withProcessTerm (cardanoNodeProcess dir args) $ \_p -> do
+    putStrLn "Started cardano-node with:"
+    pPrint args
+    cont
+      RunningNode
+        { nodeVersion
+        , nodeSocket = "TODO/node.socket"
+        , networkId = Testnet (NetworkMagic 11111)
+        , blockTime = 20
+        }
  where
   binDir = dir </> "bin"
 
@@ -79,38 +82,22 @@ withCardanoNodeDevnet dir cont = do
 setupCardanoDevnet :: FilePath -> IO CardanoNodeArgs
 setupCardanoDevnet dir = do
   createDirectoryIfMissing True dir
-  [dlgCert, signKey, vrfKey, kesKey, opCert] <-
-    mapM
-      copyDevnetCredential
-      [ "byron-delegation.cert"
-      , "byron-delegate.key"
-      , "vrf.skey"
-      , "kes.skey"
-      , "opcert.cert"
-      ]
-  let args =
-        defaultCardanoNodeArgs
-          { nodeDlgCertFile = Just dlgCert
-          , nodeSignKeyFile = Just signKey
-          , nodeVrfKeyFile = Just vrfKey
-          , nodeKesKeyFile = Just kesKey
-          , nodeOpCertFile = Just opCert
-          }
-  copyDevnetFiles args
-  refreshSystemStart args
-  writeTopology args
+  copyDevnetFiles
+  refreshSystemStart
+  writeTopology
   pure args
  where
-  copyDevnetCredential file = do
-    let destination = dir </> file
-    exists <- doesFileExist destination
-    unless exists $
-      readConfigFile file >>= BS.writeFile destination
-    setFileMode destination ownerReadMode
-    pure destination
+  args =
+    defaultCardanoNodeArgs
+      { nodeDlgCertFile = Just "byron-delegation.cert"
+      , nodeSignKeyFile = Just "byron-delegate.key"
+      , nodeVrfKeyFile = Just "vrf.skey"
+      , nodeKesKeyFile = Just "kes.skey"
+      , nodeOpCertFile = Just "opcert.cert"
+      }
 
-  copyDevnetFiles args = do
-    -- TODO copy devnet files from binary
+  copyDevnetFiles = do
+    -- TODO copy devnet files from binary and simplify
     readConfigFile "cardano-node.json"
       >>= BS.writeFile (dir </> nodeConfigFile args)
     readConfigFile "genesis-byron.json"
@@ -121,21 +108,36 @@ setupCardanoDevnet dir = do
       >>= BS.writeFile (dir </> nodeAlonzoGenesisFile args)
     readConfigFile "genesis-conway.json"
       >>= BS.writeFile (dir </> nodeConwayGenesisFile args)
+    for_ (nodeDlgCertFile args) $ \fp -> do
+      readConfigFile "byron-delegation.cert" >>= BS.writeFile (dir </> fp)
+      setFileMode (dir </> fp) ownerReadMode
+    for_ (nodeSignKeyFile args) $ \fp -> do
+      readConfigFile "byron-delegate.key" >>= BS.writeFile (dir </> fp)
+      setFileMode (dir </> fp) ownerReadMode
+    for_ (nodeVrfKeyFile args) $ \fp -> do
+      readConfigFile "vrf.skey" >>= BS.writeFile (dir </> fp)
+      setFileMode (dir </> fp) ownerReadMode
+    for_ (nodeKesKeyFile args) $ \fp -> do
+      readConfigFile "kes.skey" >>= BS.writeFile (dir </> fp)
+      setFileMode (dir </> fp) ownerReadMode
+    for_ (nodeOpCertFile args) $ \fp -> do
+      readConfigFile "opcert.cert" >>= BS.writeFile (dir </> fp)
+      setFileMode (dir </> fp) ownerReadMode
 
-  writeTopology args =
+  writeTopology =
     Aeson.encodeFile (dir </> nodeTopologyFile args) $
       object ["Producers" .= [] @String]
 
   -- Re-generate configuration and genesis files with fresh system start times.
-  refreshSystemStart args = do
+  refreshSystemStart = do
     systemStart <- addUTCTime 1 <$> getCurrentTime
 
-    let startTime = utcTimeToPOSIXSeconds systemStart
+    let startTime = round @_ @Int $ utcTimeToPOSIXSeconds systemStart
     byronGenesis <-
       decodeJsonFileOrFail @Aeson.Value (dir </> nodeByronGenesisFile args)
         <&> atKey "startTime" ?~ toJSON startTime
 
-    let systemStartUTC = posixSecondsToUTCTime startTime
+    let systemStartUTC = posixSecondsToUTCTime $ realToFrac startTime
     shelleyGenesis <-
       decodeJsonFileOrFail @Aeson.Value (dir </> nodeShelleyGenesisFile args)
         <&> atKey "systemStart" ?~ toJSON systemStartUTC

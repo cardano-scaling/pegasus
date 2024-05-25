@@ -1,10 +1,11 @@
 module Pegasus.CardanoNode where
 
 import Data.ByteString (toStrict)
+import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import System.Process.Typed (proc, readProcessStdout_)
+import System.Process.Typed (ProcessConfig, proc, readProcessStdout_, setWorkingDir)
 
 -- | Get version of 'cardano-node' from PATH.
 getCardanoNodeVersion :: IO Text
@@ -49,3 +50,39 @@ defaultCardanoNodeArgs =
     , nodeKesKeyFile = Nothing
     , nodeVrfKeyFile = Nothing
     }
+
+-- | Derive the 'ProcessConfig' to run a 'cardano-node' process.
+cardanoNodeProcess :: FilePath -> CardanoNodeArgs -> ProcessConfig () () ()
+cardanoNodeProcess workingDir args =
+  proc "cardano-node" strArgs
+    & setWorkingDir workingDir
+ where
+  strArgs =
+    "run"
+      : concat
+        [ ["--config", nodeConfigFile]
+        , ["--topology", nodeTopologyFile]
+        , ["--database-path", nodeDatabaseDir]
+        , ["--socket-path", nodeSocket]
+        , opt "--byron-signing-key" nodeSignKeyFile
+        , opt "--byron-delegation-certificate" nodeDlgCertFile
+        , opt "--shelley-operational-certificate" nodeOpCertFile
+        , opt "--shelley-kes-key" nodeKesKeyFile
+        , opt "--shelley-vrf-key" nodeVrfKeyFile
+        ]
+
+  opt arg = \case
+    Nothing -> []
+    Just val -> [arg, val]
+
+  CardanoNodeArgs
+    { nodeConfigFile
+    , nodeTopologyFile
+    , nodeDatabaseDir
+    , nodeSocket
+    , nodeSignKeyFile
+    , nodeDlgCertFile
+    , nodeOpCertFile
+    , nodeKesKeyFile
+    , nodeVrfKeyFile
+    } = args

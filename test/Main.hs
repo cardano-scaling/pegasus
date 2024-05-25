@@ -16,7 +16,7 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  it "starts a devnet in < 0.1 second" $ failAfter 0.1 testStartsDevnet
+  it "starts a devnet in < 1 second" $ failAfter 1 testStartsDevnet
   it "embeds a cardano-node" testCardanoNodeEmbed
 
 testStartsDevnet :: IO ()
@@ -27,7 +27,7 @@ testStartsDevnet =
   waitUntilReady p = do
     t <- BS8.hGetLine (getStdout p)
     -- TODO: update to a better "ready" indicator
-    unless ("cardano-node 8.9.0" `BS8.isInfixOf` t) $
+    unless ("TraceAdoptedBlock" `BS8.isInfixOf` t) $
       waitUntilReady p
 
   cmd =
