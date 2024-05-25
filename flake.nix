@@ -19,7 +19,7 @@
       pkgs = import nixpkgs {
         inherit system;
         overlays = [
-          # Contains libsodium, libblst and libsecp25k1 libraries
+          # Contains libsodium-vrf, libblst and libsecp25k1 libraries
           inputs.iohk-nix.overlays.crypto
         ];
       };
@@ -47,14 +47,17 @@
       ]);
     in
     {
+      legacyPackages = pkgs;
+
       devShells.default = pkgs.mkShell {
         packages =
           let
             libs = [
               pkgs.pkg-config
-              pkgs.libsodium
+              pkgs.libsodium-vrf
               pkgs.blst
               pkgs.secp256k1
+              pkgs.zlib
             ];
             tools = [
               pkgs.cabal-install
