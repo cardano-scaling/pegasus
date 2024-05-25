@@ -3,7 +3,7 @@
 module Pegasus where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), SocketPath)
-import Control.Monad ((>=>))
+import Control.Monad (unless, (>=>))
 import Data.Aeson (FromJSON, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
@@ -17,12 +17,12 @@ import Data.Time (NominalDiffTime, getCurrentTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Lens.Micro (at, (?~))
 import Lens.Micro.Aeson (_Object)
+import Paths_pegasus qualified as Pkg
 import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCardanoNodeArgs, getCardanoNodeVersion)
 import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, findExecutable, removeDirectoryRecursive)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
 import System.FilePath ((</>))
-import Paths_pegasus qualified as Pkg
 import System.Posix (ownerReadMode, setFileMode)
 import System.Process.Typed (withProcessTerm)
 import Text.Pretty.Simple (pPrint)
@@ -101,26 +101,40 @@ setupCardanoDevnet dir = do
       }
 
   copyDevnetFiles = do
-    BS.writeFile (dir </> nodeConfigFile args) $(embedFile "config/cardano-node.json")
-    BS.writeFile (dir </> nodeByronGenesisFile args) $(embedFile "config/genesis-byron.json")
-    BS.writeFile (dir </> nodeShelleyGenesisFile args) $(embedFile "config/genesis-shelley.json")
-    BS.writeFile (dir </> nodeAlonzoGenesisFile args) $(embedFile "config/genesis-alonzo.json")
-    BS.writeFile (dir </> nodeConwayGenesisFile args) $(embedFile "config/genesis-conway.json")
-    for_ (nodeDlgCertFile args) $ \fp -> do
-      BS.writeFile (dir </> fp) $(embedFile "config/byron-delegation.cert")
-      setFileMode (dir </> fp) ownerReadMode
-    for_ (nodeSignKeyFile args) $ \fp -> do
-      BS.writeFile (dir </> fp) $(embedFile "config/byron-delegate.key")
-      setFileMode (dir </> fp) ownerReadMode
-    for_ (nodeVrfKeyFile args) $ \fp -> do
-      BS.writeFile (dir </> fp) $(embedFile "config/vrf.skey")
-      setFileMode (dir </> fp) ownerReadMode
-    for_ (nodeKesKeyFile args) $ \fp -> do
-      BS.writeFile (dir </> fp) $(embedFile "config/kes.skey")
-      setFileMode (dir </> fp) ownerReadMode
-    for_ (nodeOpCertFile args) $ \fp -> do
-      BS.writeFile (dir </> fp) $(embedFile "config/opcert.cert")
-      setFileMode (dir </> fp) ownerReadMode
+    unlessExists (dir </> nodeConfigFile args) $ \fp ->
+      BS.writeFile fp $(embedFile "config/cardano-node.json")
+    unlessExists (dir </> nodeByronGenesisFile args) $ \fp ->
+      BS.writeFile fp $(embedFile "config/genesis-byron.json")
+    unlessExists (dir </> nodeShelleyGenesisFile args) $ \fp ->
+      BS.writeFile fp $(embedFile "config/genesis-shelley.json")
+    unlessExists (dir </> nodeAlonzoGenesisFile args) $ \fp ->
+      BS.writeFile fp $(embedFile "config/genesis-alonzo.json")
+    unlessExists (dir </> nodeConwayGenesisFile args) $ \fp ->
+      BS.writeFile fp $(embedFile "config/genesis-conway.json")
+    for_ (nodeDlgCertFile args) $ \fn ->
+      unlessExists (dir </> fn) $ \fp -> do
+        BS.writeFile fp $(embedFile "config/byron-delegation.cert")
+        setFileMode fp ownerReadMode
+    for_ (nodeSignKeyFile args) $ \fn ->
+      unlessExists (dir </> fn) $ \fp -> do
+        BS.writeFile fp $(embedFile "config/byron-delegate.key")
+        setFileMode fp ownerReadMode
+    for_ (nodeVrfKeyFile args) $ \fn ->
+      unlessExists (dir </> fn) $ \fp -> do
+        BS.writeFile fp $(embedFile "config/vrf.skey")
+        setFileMode fp ownerReadMode
+    for_ (nodeKesKeyFile args) $ \fn ->
+      unlessExists (dir </> fn) $ \fp -> do
+        BS.writeFile fp $(embedFile "config/kes.skey")
+        setFileMode fp ownerReadMode
+    for_ (nodeOpCertFile args) $ \fn ->
+      unlessExists (dir </> fn) $ \fp -> do
+        BS.writeFile fp $(embedFile "config/opcert.cert")
+        setFileMode fp ownerReadMode
+
+  unlessExists fp action = do
+    exists <- doesFileExist fp
+    unless exists (action fp)
 
   writeTopology =
     Aeson.encodeFile (dir </> nodeTopologyFile args) $
