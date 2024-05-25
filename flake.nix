@@ -4,14 +4,24 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    iohk-nix.url = "github:input-output-hk/iohk-nix";
   };
 
   outputs =
-    inputs@{ self, flake-utils, nixpkgs, ... }:
+    { self
+    , flake-utils
+    , nixpkgs
+    , iohk-nix
+    , ...
+    } @ inputs:
     flake-utils.lib.eachSystem flake-utils.lib.defaultSystems (system:
     let
       pkgs = import nixpkgs {
         inherit system;
+        overlays = [
+          # Contains libsodium, libblst and libsecp25k1 libraries
+          inputs.iohk-nix.overlays.crypto
+        ];
       };
 
       hsPkgs = pkgs.haskellPackages;
@@ -38,12 +48,31 @@
     in
     {
       devShells.default = pkgs.mkShell {
-        packages = [
-          pkgs.cabal-install
-          hsPkgs.haskell-language-server
-          hsPkgs.fourmolu
-          hsPkgs.cabal-fmt
-        ];
+        packages =
+          let
+            libs = [
+              pkgs.pkg-config
+              pkgs.libsodium
+              pkgs.blst
+              pkgs.secp256k1
+            ];
+            tools = [
+              pkgs.cabal-install
+              hsPkgs.haskell-language-server
+              hsPkgs.fourmolu
+              hsPkgs.cabal-fmt
+            ];
+          in
+          libs ++ tools;
       };
     });
+
+  nixConfig = {
+    extra-substituters = [
+      "https://cache.iog.io"
+    ];
+    extra-trusted-public-keys = [
+      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+    ];
+  };
 }
