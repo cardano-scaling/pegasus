@@ -33,10 +33,7 @@ withCardanoNodeDevnet ::
   IO a
 withCardanoNodeDevnet dir cont = do
   cleanup
-  createDirectoryIfMissing True binDir
-  writeCardanoNodeTo $ binDir </> "cardano-node"
-  -- Add devnet directory bin/ to the path
-  getEnv "PATH" >>= \path -> setEnv "PATH" (path <> ":" <> binDir)
+  instantiateCardanoNode
   v <- getCardanoNodeVersion
   putStrLn $ "Using " <> v
   putStrLn "TODO: should start a devnet node"
@@ -55,3 +52,11 @@ withCardanoNodeDevnet dir cont = do
       True -> do
         putStrLn $ "Reset devnet dir " <> dir
         removeDirectoryRecursive dir
+
+  instantiateCardanoNode = do
+    createDirectoryIfMissing True binDir
+    writeCardanoNodeTo $ binDir </> "cardano-node"
+    -- NOTE: We put it into first position to ensure the cardano-node included
+    -- is used (until users can pick one)
+    getEnv "PATH" >>= \path -> setEnv "PATH" (path <> ":" <> binDir)
+

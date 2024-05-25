@@ -2,11 +2,12 @@
 
 module Pegasus.CardanoNode where
 
+import Data.Bits ((.|.))
 import Data.ByteString (toStrict)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Pegasus.CardanoNode.Embed (embedCardanoNode)
-import System.Posix.Files (ownerExecuteMode, setFileMode)
+import System.Posix.Files (ownerExecuteMode, ownerReadMode, ownerWriteMode, setFileMode)
 import System.Process.Typed (proc, readProcessStdout_)
 
 -- | Get version of 'cardano-node' from PATH.
