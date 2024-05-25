@@ -5,6 +5,7 @@ import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import System.FilePath ((</>))
 import System.Process.Typed (ProcessConfig, proc, readProcessStdout_, setWorkingDir)
 
 -- | Get version of 'cardano-node' from PATH.
@@ -54,7 +55,7 @@ defaultCardanoNodeArgs =
 -- | Derive the 'ProcessConfig' to run a 'cardano-node' process.
 cardanoNodeProcess :: FilePath -> CardanoNodeArgs -> ProcessConfig () () ()
 cardanoNodeProcess workingDir args =
-  proc "cardano-node" strArgs
+  proc ("bin" </> "cardano-node") strArgs
     & setWorkingDir workingDir
  where
   strArgs =
