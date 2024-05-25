@@ -5,18 +5,14 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     iohk-nix.url = "github:input-output-hk/iohk-nix";
+    cardano-node.url = "github:intersectmbo/cardano-node/8.9.0";
   };
 
   outputs =
-    { self
-    , flake-utils
-    , nixpkgs
-    , iohk-nix
-    , ...
-    } @ inputs:
+    { flake-utils, ... } @ inputs:
     flake-utils.lib.eachSystem flake-utils.lib.defaultSystems (system:
     let
-      pkgs = import nixpkgs {
+      pkgs = import inputs.nixpkgs {
         inherit system;
         overlays = [
           # Contains libsodium-vrf, libblst and libsecp25k1 libraries
@@ -66,7 +62,10 @@
               hsPkgs.cabal-fmt
             ];
           in
-          libs ++ tools;
+          libs ++ tools ++ [
+            # Cardano-node to build against
+            inputs.cardano-node.packages.${system}.cardano-node
+          ];
       };
     });
 
