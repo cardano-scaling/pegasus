@@ -1,23 +1,15 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Pegasus.CardanoNode where
 
-import Data.Bits ((.|.))
 import Data.ByteString (toStrict)
-import Data.ByteString qualified as BS
-import Data.ByteString.Char8 qualified as BS8
-import Pegasus.CardanoNode.Embed (embedCardanoNode)
-import System.Posix.Files (ownerExecuteMode, ownerReadMode, ownerWriteMode, setFileMode)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import System.Process.Typed (proc, readProcessStdout_)
 
 -- | Get version of 'cardano-node' from PATH.
-getCardanoNodeVersion :: IO String
+getCardanoNodeVersion :: IO Text
 getCardanoNodeVersion =
-  BS8.unpack . toStrict
+  Text.replace "\n" " "
+    . Text.decodeUtf8
+    . toStrict
     <$> readProcessStdout_ (proc "cardano-node" ["--version"])
-
--- | Write the embedded 'cardano-node' binary to a path.
-writeCardanoNodeTo :: FilePath -> IO ()
-writeCardanoNodeTo fp = do
-  BS.writeFile fp $(embedCardanoNode)
-  setFileMode fp (ownerReadMode .|. ownerWriteMode .|. ownerExecuteMode)

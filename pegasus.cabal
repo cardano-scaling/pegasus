@@ -36,6 +36,7 @@ library
     Pegasus
     Pegasus.CardanoNode
     Pegasus.CardanoNode.Embed
+    Pegasus.CardanoNode.EmbedTH
 
   build-depends:
     , aeson

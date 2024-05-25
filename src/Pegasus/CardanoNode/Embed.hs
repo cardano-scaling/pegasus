@@ -1,17 +1,15 @@
--- | Template haskell expression to embed the 'cardano-node'.
+{-# LANGUAGE TemplateHaskell #-}
+
+-- | Functions to access the 'cardano-node' binary.
 module Pegasus.CardanoNode.Embed where
 
-import Data.FileEmbed (embedFile)
-import Language.Haskell.TH (Exp, Q, runIO)
-import System.Directory (findExecutable)
+import Data.Bits ((.|.))
+import Data.ByteString qualified as BS
+import Pegasus.CardanoNode.EmbedTH (embedCardanoNode)
+import System.Posix.Files (ownerExecuteMode, ownerReadMode, ownerWriteMode, setFileMode)
 
--- | Template haskell expression to find and embed the 'cardano-node' binary.
-embedCardanoNode :: Q Exp
-embedCardanoNode = do
-  fp <- runIO $ do
-    findExecutable "cardano-node" >>= \case
-      Nothing -> fail "cardano-node not found, ensure it is in PATH when compiling (and do a cabal clean)"
-      Just fp -> do
-        putStrLn $ "Embedding cardano-node from: " <> fp
-        pure fp
-  embedFile fp
+-- | Write the embedded 'cardano-node' binary to a path.
+writeCardanoNodeTo :: FilePath -> IO ()
+writeCardanoNodeTo fp = do
+  BS.writeFile fp $(embedCardanoNode)
+  setFileMode fp (ownerReadMode .|. ownerWriteMode .|. ownerExecuteMode)

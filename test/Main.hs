@@ -25,7 +25,7 @@ testStartsDevnet =
   waitUntilReady p = do
     t <- BS8.hGetLine (getStdout p)
     -- TODO: update to a better "ready" indicator
-    unless ("Using cardano-node 8.9.0" `BS8.isInfixOf` t) $
+    unless ("cardano-node 8.9.0" `BS8.isInfixOf` t) $
       waitUntilReady p
 
   cmd =
