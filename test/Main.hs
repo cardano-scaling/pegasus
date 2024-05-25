@@ -5,17 +5,19 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString.Char8 qualified as BS8
 import Data.Function ((&))
 import Data.Time (NominalDiffTime)
-import System.Process.Typed (createPipe, getStdout, proc, setStdout, withProcessTerm)
+import System.Directory (doesFileExist)
+import System.Process.Typed (createPipe, getStdout, nullStream, proc, setStdout, withProcessTerm)
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
-import Test.Hspec (HasCallStack, Spec, hspec, it)
+import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn)
 
 main :: IO ()
 main = hspec spec
 
 spec :: Spec
-spec =
+spec = do
   it "starts a devnet in < 0.1 second" $ failAfter 0.1 testStartsDevnet
+  it "embeds a cardano-node" testCardanoNodeEmbed
 
 testStartsDevnet :: IO ()
 testStartsDevnet =
@@ -31,6 +33,13 @@ testStartsDevnet =
   cmd =
     proc "pegasus" []
       & setStdout createPipe
+
+testCardanoNodeEmbed :: IO ()
+testCardanoNodeEmbed = do
+  withProcessTerm (proc "pegasus" [] & setStdout nullStream) $ \_ -> do
+    doesFileExist "tmp-pegasus/bin/cardano-node" `shouldReturn` True
+
+-- * Helpers
 
 -- | Fail some IO action if it does not complete within given timeout.
 -- A 'NominalDiffTime' can be represented as a decimal number of seconds.
