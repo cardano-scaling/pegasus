@@ -9,6 +9,17 @@ maintainer:      sebastian.nagel@ncoding.at
 copyright:       2024 Sebastian Nagel
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
+data-files:
+  config/byron-delegate.key
+  config/byron-delegation.cert
+  config/cardano-node.json
+  config/genesis-alonzo.json
+  config/genesis-byron.json
+  config/genesis-conway.json
+  config/genesis-shelley.json
+  config/kes.skey
+  config/opcert.cert
+  config/vrf.skey
 
 common project-config
   default-language:   GHC2021
