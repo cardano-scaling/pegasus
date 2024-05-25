@@ -44,6 +44,7 @@ common project-config
 library
   import:          project-config
   exposed-modules:
+    Paths_pegasus
     Pegasus
     Pegasus.CardanoNode
     Pegasus.CardanoNode.Embed
@@ -59,6 +60,7 @@ library
     , filepath
     , microlens
     , microlens-aeson
+    , pretty-simple
     , template-haskell
     , text
     , time
