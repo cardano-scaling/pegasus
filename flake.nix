@@ -14,19 +14,31 @@
         inherit system;
       };
 
-      hsPkgs = pkgs.haskellPackages.extend (pkgs.haskell.lib.compose.packageSourceOverrides {
-        pegasus = ./.;
-      });
+      hsPkgs = pkgs.haskellPackages;
 
-      pegasus' = pkgs.haskell.lib.dontCheck hsPkgs.pegasus;
+      ghcWithPackages = pkgs.haskell.packages.ghc98.ghcWithPackages (ps: with ps; [
+        # Nix-provided libraries (no need to rebuild)
+        # XXX: Annoying to keep updated with .cabal build-depends
+        # library
+        aeson
+        bytestring
+        directory
+        filepath
+        microlens
+        microlens-aeson
+        text
+        time
+        typed-process
+        # executable
+        pretty-simple
+        # tests
+        hspec
+        HUnit
+      ]);
     in
     {
-      packages.default = pegasus';
-
-      devShells.default = hsPkgs.shellFor {
-        packages = p: [ p.pegasus ];
-        withHoogle = true;
-        buildInputs = [
+      devShells.default = pkgs.mkShell {
+        packages = [
           pkgs.cabal-install
           hsPkgs.haskell-language-server
           hsPkgs.fourmolu

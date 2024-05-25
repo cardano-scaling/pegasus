@@ -73,6 +73,7 @@ cabal run
 
 ### TODO
 - [ ] Fill TODOs in readme
+- [ ] Embed `cardano-node` and config at build time mechanism
 - [ ] Pre-built binaries
 - [ ] Configurable block time `--block-time 0.1`
 - [ ] Use provided cardano-node `--use-cardano-node <path-to-exe>`
