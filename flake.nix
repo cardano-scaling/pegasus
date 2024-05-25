@@ -69,6 +69,13 @@
             inputs.cardano-node.packages.${system}.cardano-node
           ];
       };
+
+      # Only cabal and no cardano-node to run integration tests
+      devShells.onlyCabal = pkgs.mkShell {
+        packages = [
+          pkgs.cabal-install
+        ];
+      };
     });
 
   nixConfig = {
