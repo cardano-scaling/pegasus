@@ -10,7 +10,7 @@ main :: IO ()
 main = do
   -- NOTE: Allow for continous consumption of stdout
   hSetBuffering stdout NoBuffering
-  Pegasus.withCardanoNodeDevnet "." $ \runningNode -> do
+  Pegasus.withCardanoNodeDevnet "tmp-pegasus" $ \runningNode -> do
     putStrLn "Started devnet"
     pPrint runningNode
     putStrLn "TODO: should seed the network"

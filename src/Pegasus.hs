@@ -11,8 +11,9 @@ import Data.Time.Clock (addUTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Lens.Micro (at, (?~))
 import Lens.Micro.Aeson (_Object)
-import Pegasus.CardanoNode (getCardanoNodeVersion)
-import System.Directory (createDirectoryIfMissing)
+import Pegasus.CardanoNode (getCardanoNodeVersion, writeCardanoNodeTo)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive)
+import System.Environment (getEnv, setEnv)
 import System.FilePath ((</>))
 
 data RunningNode = RunningNode
@@ -30,7 +31,12 @@ withCardanoNodeDevnet ::
   -- | Callback when network started.
   (RunningNode -> IO a) ->
   IO a
-withCardanoNodeDevnet _dir cont = do
+withCardanoNodeDevnet dir cont = do
+  cleanup
+  createDirectoryIfMissing True binDir
+  writeCardanoNodeTo $ binDir </> "cardano-node"
+  -- Add devnet directory bin/ to the path
+  getEnv "PATH" >>= \path -> setEnv "PATH" (path <> ":" <> binDir)
   v <- getCardanoNodeVersion
   putStrLn $ "Using " <> v
   putStrLn "TODO: should start a devnet node"
@@ -40,3 +46,12 @@ withCardanoNodeDevnet _dir cont = do
       , networkId = Testnet (NetworkMagic 11111)
       , blockTime = 20
       }
+ where
+  binDir = dir </> "bin"
+
+  cleanup = do
+    doesDirectoryExist dir >>= \case
+      False -> pure ()
+      True -> do
+        putStrLn $ "Reset devnet dir " <> dir
+        removeDirectoryRecursive dir

@@ -29,12 +29,14 @@
         aeson
         bytestring
         directory
+        file-embed
         filepath
         microlens
         microlens-aeson
         text
         time
         typed-process
+        unix
         # executable
         pretty-simple
         # tests

@@ -72,9 +72,20 @@ cabal run
 - Both `pegasus` and the included `cardano-node` are statically linked and have no or minimal dependencies
 
 ### TODO
+
+#### Basics
+
+- [x] Embed `cardano-node` at build time mechanism
+- [ ] Embed config and start a devnet
+
+#### Distribution 
+- [ ] Redistributable executable (static libs)
+- [ ] Pre-built binaries and "curl install"
+- [ ] Reduce size of binaries
+- [ ] Full static exeutable (?)
 - [ ] Fill TODOs in readme
-- [ ] Embed `cardano-node` and config at build time mechanism
-- [ ] Pre-built binaries
+
+#### Configurability
 - [ ] Configurable block time `--block-time 0.1`
 - [ ] Use provided cardano-node `--use-cardano-node <path-to-exe>`
 - [ ] Configurable era, e.g. `--babbage`
