@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Pegasus where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), SocketPath)
@@ -6,6 +8,8 @@ import Data.Aeson (FromJSON, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.FileEmbed (embedFile)
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -18,8 +22,6 @@ import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
 import System.FilePath ((</>))
-
-import Data.Foldable (for_)
 import Paths_pegasus qualified as Pkg
 import System.Posix (ownerReadMode, setFileMode)
 import System.Process.Typed (withProcessTerm)
@@ -49,7 +51,9 @@ withCardanoNodeDevnet dir cont = do
     Just fp -> putStrLn $ "Using cardano-node: " <> fp
   nodeVersion <- getCardanoNodeVersion
   args <- setupCardanoDevnet dir
-  withProcessTerm (cardanoNodeProcess dir args) $ \_p -> do
+  let p = cardanoNodeProcess dir args
+  pPrint p
+  withProcessTerm p $ \_p -> do
     putStrLn "Started cardano-node with:"
     pPrint args
     cont
@@ -74,7 +78,7 @@ withCardanoNodeDevnet dir cont = do
     writeCardanoNodeTo $ binDir </> "cardano-node"
     -- NOTE: We put it into first position to ensure the cardano-node included
     -- is used (until users can pick one)
-    getEnv "PATH" >>= \path -> setEnv "PATH" (path <> ":" <> binDir)
+    getEnv "PATH" >>= \path -> setEnv "PATH" (binDir <> ":" <> path)
 
 -- | Setup configuration for cardano-node to run a local devnet producing
 -- blocks. This copies the appropriate files and prepares 'CardanoNodeArgs' for
@@ -97,31 +101,25 @@ setupCardanoDevnet dir = do
       }
 
   copyDevnetFiles = do
-    -- TODO copy devnet files from binary and simplify
-    readConfigFile "cardano-node.json"
-      >>= BS.writeFile (dir </> nodeConfigFile args)
-    readConfigFile "genesis-byron.json"
-      >>= BS.writeFile (dir </> nodeByronGenesisFile args)
-    readConfigFile "genesis-shelley.json"
-      >>= BS.writeFile (dir </> nodeShelleyGenesisFile args)
-    readConfigFile "genesis-alonzo.json"
-      >>= BS.writeFile (dir </> nodeAlonzoGenesisFile args)
-    readConfigFile "genesis-conway.json"
-      >>= BS.writeFile (dir </> nodeConwayGenesisFile args)
+    BS.writeFile (dir </> nodeConfigFile args) $(embedFile "config/cardano-node.json")
+    BS.writeFile (dir </> nodeByronGenesisFile args) $(embedFile "config/genesis-byron.json")
+    BS.writeFile (dir </> nodeShelleyGenesisFile args) $(embedFile "config/genesis-shelley.json")
+    BS.writeFile (dir </> nodeAlonzoGenesisFile args) $(embedFile "config/genesis-alonzo.json")
+    BS.writeFile (dir </> nodeConwayGenesisFile args) $(embedFile "config/genesis-conway.json")
     for_ (nodeDlgCertFile args) $ \fp -> do
-      readConfigFile "byron-delegation.cert" >>= BS.writeFile (dir </> fp)
+      BS.writeFile (dir </> fp) $(embedFile "config/byron-delegation.cert")
       setFileMode (dir </> fp) ownerReadMode
     for_ (nodeSignKeyFile args) $ \fp -> do
-      readConfigFile "byron-delegate.key" >>= BS.writeFile (dir </> fp)
+      BS.writeFile (dir </> fp) $(embedFile "config/byron-delegate.key")
       setFileMode (dir </> fp) ownerReadMode
     for_ (nodeVrfKeyFile args) $ \fp -> do
-      readConfigFile "vrf.skey" >>= BS.writeFile (dir </> fp)
+      BS.writeFile (dir </> fp) $(embedFile "config/vrf.skey")
       setFileMode (dir </> fp) ownerReadMode
     for_ (nodeKesKeyFile args) $ \fp -> do
-      readConfigFile "kes.skey" >>= BS.writeFile (dir </> fp)
+      BS.writeFile (dir </> fp) $(embedFile "config/kes.skey")
       setFileMode (dir </> fp) ownerReadMode
     for_ (nodeOpCertFile args) $ \fp -> do
-      readConfigFile "opcert.cert" >>= BS.writeFile (dir </> fp)
+      BS.writeFile (dir </> fp) $(embedFile "config/opcert.cert")
       setFileMode (dir </> fp) ownerReadMode
 
   writeTopology =
