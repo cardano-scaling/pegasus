@@ -9,7 +9,7 @@ import Data.ByteString qualified as BS
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Time (NominalDiffTime, addUTCTime, getCurrentTime)
+import Data.Time (NominalDiffTime, getCurrentTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Lens.Micro (at, (?~))
 import Lens.Micro.Aeson (_Object)
@@ -130,8 +130,7 @@ setupCardanoDevnet dir = do
 
   -- Re-generate configuration and genesis files with fresh system start times.
   refreshSystemStart = do
-    systemStart <- addUTCTime 1 <$> getCurrentTime
-
+    systemStart <- getCurrentTime
     let startTime = round @_ @Int $ utcTimeToPOSIXSeconds systemStart
     byronGenesis <-
       decodeJsonFileOrFail @Aeson.Value (dir </> nodeByronGenesisFile args)

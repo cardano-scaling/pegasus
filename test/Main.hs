@@ -19,6 +19,7 @@ spec = do
   it "starts a devnet in < 1 second" $ failAfter 1 testStartsDevnet
   it "embeds a cardano-node" testCardanoNodeEmbed
 
+-- FIXME: This test leaks cardano-node processes
 testStartsDevnet :: IO ()
 testStartsDevnet =
   withProcessTerm cmd $ \p -> do
