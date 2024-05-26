@@ -60,7 +60,6 @@ library
     , filepath
     , microlens
     , microlens-aeson
-    , pretty-simple
     , template-haskell
     , text
     , time
