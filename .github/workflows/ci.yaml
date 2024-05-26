@@ -28,6 +28,14 @@ jobs:
     - name: Build
       run: |
         nix develop --command bash -c "cabal build"
+        mkdir -p bin
+        nix develop --command bash -c "cp $(cabal list-bin pegasus) bin"
+
+    - name: 💾 Upload executables
+      uses: actions/upload-artifact@v4
+      with:
+        name: pegasus-x86_64-linux
+        path: bin/*
 
     - name: Test
       # NOTE: The ci shell does not contain cardano-node
