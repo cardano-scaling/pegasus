@@ -2,7 +2,8 @@
 
 module Pegasus where
 
-import Cardano.Api (NetworkId (..), NetworkMagic (..), SocketPath)
+import Cardano.Api (File (..), NetworkId (..), NetworkMagic (..), SocketPath)
+import Control.Exception (IOException, throwIO, try)
 import Control.Monad (unless, (>=>))
 import Data.Aeson (FromJSON, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
@@ -10,6 +11,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.FileEmbed (embedFile)
 import Data.Foldable (for_)
+import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -22,14 +24,16 @@ import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCar
 import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
+import System.IO (BufferMode (NoBuffering), Handle, IOMode (AppendMode), hSetBuffering)
+import System.IO qualified
 import System.Posix (ownerReadMode, setFileMode)
-import System.Process.Typed (withProcessTerm)
-import Text.Pretty.Simple (pPrint)
+import System.Process.Typed (setStdout, useHandleClose, withProcessTerm)
 
 data RunningNode = RunningNode
   { nodeVersion :: Text
   , nodeSocket :: SocketPath
+  , logFile :: FilePath
   , networkId :: NetworkId
   , blockTime :: NominalDiffTime
   -- ^ Expected time between blocks (varies a lot on testnets)
@@ -50,21 +54,24 @@ withCardanoNodeDevnet dir cont = do
     Nothing -> pure ()
     Just fp -> putStrLn $ "Using cardano-node: " <> fp
   nodeVersion <- getCardanoNodeVersion
-  args <- setupCardanoDevnet dir
-  let p = cardanoNodeProcess dir args
-  pPrint p
-  withProcessTerm p $ \_p -> do
-    putStrLn "Started cardano-node with:"
-    pPrint args
-    cont
-      RunningNode
-        { nodeVersion
-        , nodeSocket = "TODO/node.socket"
-        , networkId = Testnet (NetworkMagic 11111)
-        , blockTime = 20
-        }
+  args@CardanoNodeArgs{nodeSocket} <- setupCardanoDevnet dir
+  withLogFile logFile $ \hLog -> do
+    let cmd =
+          cardanoNodeProcess dir args
+            & setStdout (useHandleClose hLog)
+    withProcessTerm cmd $ \_p -> do
+      cont
+        RunningNode
+          { nodeVersion
+          , nodeSocket = File $ dir </> nodeSocket
+          , logFile
+          , networkId = Testnet (NetworkMagic 42) -- TODO: load this from config
+          , blockTime = 0.1 -- FIXME: query this
+          }
  where
   binDir = dir </> "bin"
+
+  logFile = dir </> "logs" </> "cardano-node.log"
 
   cleanup = do
     doesDirectoryExist dir >>= \case
@@ -173,3 +180,19 @@ decodeJsonFileOrFail = Aeson.eitherDecodeFileStrict >=> either fail pure
 readConfigFile :: FilePath -> IO ByteString
 readConfigFile fp =
   Pkg.getDataFileName ("config" </> fp) >>= BS.readFile
+
+-- | Open a non-buffered log file in append mode.
+withLogFile :: FilePath -> (Handle -> IO b) -> IO b
+withLogFile fp action = do
+  createDirectoryIfMissing True (takeDirectory fp)
+  withFile fp AppendMode (\out -> hSetBuffering out NoBuffering >> action out)
+
+-- | Like 'withFile' from 'base', but without annotating errors originating from
+-- enclosed action.
+--
+-- XXX: This should be fixed upstream in 'base'.
+withFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
+withFile fp mode action =
+  System.IO.withFile fp mode (try . action) >>= \case
+    Left (e :: IOException) -> throwIO e
+    Right x -> pure x
