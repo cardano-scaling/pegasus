@@ -30,6 +30,6 @@ jobs:
         nix develop --command bash -c "cabal build"
 
     - name: Test
-      # NOTE: The onlyCabal shell does not contain cardano-node
+      # NOTE: The ci shell does not contain cardano-node
       run: |
-        nix develop .#onlyCabal --command bash -c "cabal test"
+        nix develop .#ci --command bash -c "cabal test"

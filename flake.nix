@@ -22,7 +22,7 @@
 
       hsPkgs = pkgs.haskellPackages;
 
-      ghcWithPackages = pkgs.haskell.packages.ghc98.ghcWithPackages (ps: with ps; [
+      ghcWithPackages = pkgs.haskell.packages.ghc96.ghcWithPackages (ps: with ps; [
         # Nix-provided libraries (no need to rebuild)
         # XXX: Annoying to keep updated with .cabal build-depends
         # library
@@ -43,39 +43,43 @@
         hspec
         HUnit
       ]);
+
+      mkShell = { isCI ? false }:
+        pkgs.mkShell {
+          packages =
+            let
+              libs = [
+                pkgs.pkg-config
+                pkgs.libsodium-vrf
+                pkgs.blst
+                pkgs.secp256k1
+                pkgs.zlib
+              ];
+              tools = [
+                pkgs.cabal-install
+                ghcWithPackages
+              ];
+              devTools = [
+                hsPkgs.haskell-language-server
+                hsPkgs.fourmolu
+                hsPkgs.cabal-fmt
+                hsPkgs.hoogle
+              ];
+            in
+            libs ++ tools ++
+            pkgs.lib.optionals (isCI == false) devTools ++
+            # Cardano-node to build against
+            pkgs.lib.optional (isCI == false) inputs.cardano-node.packages.${system}.cardano-node
+          ;
+        };
+
     in
     {
       legacyPackages = pkgs;
 
-      devShells.default = pkgs.mkShell {
-        packages =
-          let
-            libs = [
-              pkgs.pkg-config
-              pkgs.libsodium-vrf
-              pkgs.blst
-              pkgs.secp256k1
-              pkgs.zlib
-            ];
-            tools = [
-              pkgs.cabal-install
-              hsPkgs.haskell-language-server
-              hsPkgs.fourmolu
-              hsPkgs.cabal-fmt
-            ];
-          in
-          libs ++ tools ++ [
-            # Cardano-node to build against
-            inputs.cardano-node.packages.${system}.cardano-node
-          ];
-      };
-
-      # Only cabal and no cardano-node to run integration tests
-      devShells.onlyCabal = pkgs.mkShell {
-        packages = [
-          pkgs.cabal-install
-        ];
-      };
+      devShells.default = mkShell { };
+      # No dev tools and without cardano-node to run integration tests
+      devShells.ci = mkShell { isCI = true; };
     });
 
   nixConfig = {
