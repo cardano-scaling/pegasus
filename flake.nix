@@ -4,8 +4,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    iohk-nix.url = "github:input-output-hk/iohk-nix";
     cardano-node.url = "github:intersectmbo/cardano-node/8.9.0";
+    horizon-cardano.url = "git+https://gitlab.horizon-haskell.net/package-sets/horizon-cardano.git";
   };
 
   outputs =
@@ -14,80 +14,56 @@
     let
       pkgs = import inputs.nixpkgs {
         inherit system;
-        overlays = [
-          # Contains libsodium-vrf, libblst and libsecp25k1 libraries
-          inputs.iohk-nix.overlays.crypto
-        ];
       };
 
-      hsPkgs = pkgs.haskellPackages;
-
-      ghcWithPackages = pkgs.haskell.packages.ghc96.ghcWithPackages (ps: with ps; [
-        # Nix-provided libraries (no need to rebuild)
-        # XXX: Annoying to keep updated with .cabal build-depends
-        # library
-        aeson
-        bytestring
-        directory
-        file-embed
-        filepath
-        microlens
-        microlens-aeson
-        text
-        time
-        typed-process
-        unix
-        # executable
-        pretty-simple
-        # tests
-        hspec
-        HUnit
-      ]);
-
-      mkShell = { isCI ? false }:
-        pkgs.mkShell {
-          packages =
-            let
-              libs = [
-                pkgs.pkg-config
-                pkgs.libsodium-vrf
-                pkgs.blst
-                pkgs.secp256k1
-                pkgs.zlib
-              ];
-              tools = [
-                pkgs.cabal-install
-                ghcWithPackages
-              ];
-              devTools = [
-                hsPkgs.haskell-language-server
-                hsPkgs.fourmolu
-                hsPkgs.cabal-fmt
-                hsPkgs.hoogle
-              ];
-            in
-            libs ++ tools ++
-            pkgs.lib.optionals (isCI == false) devTools ++
+      hsPkgs = inputs.horizon-cardano.legacyPackages.${system}.extend (self: super: {
+        microlens-aeson = self.callHackage "microlens-aeson" "2.5.1" { };
+        pegasus =
+          pkgs.lib.trivial.pipe (self.callCabal2nix "pegasus" ./. { }) [
             # Cardano-node to build against
-            pkgs.lib.optional (isCI == false) inputs.cardano-node.packages.${system}.cardano-node
-          ;
-        };
-
+            (pkgs.haskell.lib.compose.addBuildTool inputs.cardano-node.packages.${system}.cardano-node)
+            # Don't run (integration) tests
+            pkgs.haskell.lib.compose.dontCheck
+          ];
+      });
     in
     {
       legacyPackages = pkgs;
 
-      devShells.default = mkShell { };
-      # No dev tools and without cardano-node to run integration tests
-      devShells.ci = mkShell { isCI = true; };
+      packages.default = hsPkgs.pegasus;
+
+      devShells.default = hsPkgs.shellFor {
+        packages = p: [ p.pegasus ];
+        withHoogle = true;
+        buildInputs = [
+          pkgs.cabal-install
+          pkgs.haskell.packages.ghc96.haskell-language-server
+          pkgs.haskell.packages.ghc96.fourmolu
+          pkgs.haskell.packages.ghc96.cabal-fmt
+        ];
+      };
+
+      # NOTE: CI dev shell deliberatly does not contain cardano-node
+      devShells.ci = (hsPkgs.extend (self: super: {
+        pegasus = pkgs.haskell.lib.overrideCabal super.pegasus {
+          buildTools = [ ];
+        };
+      })).shellFor {
+        packages = p: [ p.pegasus ];
+        buildInputs = [
+          pkgs.cabal-install
+        ];
+      };
     });
 
   nixConfig = {
     extra-substituters = [
       "https://cache.iog.io"
+      "https://horizon.cachix.org"
     ];
     extra-trusted-public-keys = [
       "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+      "horizon.cachix.org-1:MeEEDRhRZTgv/FFGCv3479/dmJDfJ82G6kfUDxMSAw0="
     ];
   };
 }
