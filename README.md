@@ -70,13 +70,15 @@ cabal run
 - Similar like other devnet tools, `pegasus` sets up a local cluster of `cardano-node`s
 - A key difference is, that it comes with a `cardano-node` binary embedded
 - Both `pegasus` and the included `cardano-node` are statically linked and have no or minimal dependencies
+  - TBD: avoid `cardano-api` et al?
 
 ### TODO
 
 #### Basics
 
 - [x] Embed `cardano-node` at build time mechanism
-- [ ] Embed config and start a devnet
+- [x] Embed config and start a devnet
+- [ ] Generate and seed keys
 
 #### Distribution 
 - [ ] Redistributable executable (static libs)
