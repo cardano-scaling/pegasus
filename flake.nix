@@ -16,6 +16,7 @@
         inherit system;
       };
 
+      # TODO: export this as an overlay
       hsPkgs = inputs.horizon-cardano.legacyPackages.${system}.extend (self: super: {
         microlens-aeson = self.callHackage "microlens-aeson" "2.5.1" { };
         pegasus =
@@ -27,10 +28,11 @@
           ];
       });
     in
-    {
-      legacyPackages = pkgs;
+    rec {
+      legacyPackages = hsPkgs;
 
-      packages.default = hsPkgs.pegasus;
+      packages.pegasus = hsPkgs.pegasus;
+      packages.default = packages.pegasus;
 
       devShells.default = hsPkgs.shellFor {
         packages = p: [ p.pegasus ];
