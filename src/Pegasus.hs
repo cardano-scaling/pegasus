@@ -27,8 +27,8 @@ import System.Environment (getEnv, setEnv)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (BufferMode (NoBuffering), Handle, IOMode (AppendMode), hSetBuffering)
 import System.IO qualified
-import System.Posix (ownerReadMode, setFileMode)
-import System.Process.Typed (setStdout, useHandleClose, withProcessTerm)
+import System.Posix (Handler (Catch), installHandler, ownerReadMode, setFileMode, sigTERM)
+import System.Process.Typed (setStdout, stopProcess, useHandleClose, withProcessWait)
 
 data RunningNode = RunningNode
   { nodeVersion :: Text
@@ -59,7 +59,10 @@ withCardanoNodeDevnet dir cont = do
     let cmd =
           cardanoNodeProcess dir args
             & setStdout (useHandleClose hLog)
-    withProcessTerm cmd $ \_p -> do
+    withProcessWait cmd $ \p -> do
+      -- Ensure the sub-process is also stopped when we get asked to terminate.
+      -- FIXME: while this makes the cardano-node stop, we don't detect stopping of it
+      _ <- installHandler sigTERM (Catch $ stopProcess p) Nothing
       cont
         RunningNode
           { nodeVersion

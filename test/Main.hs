@@ -6,7 +6,7 @@ import Data.ByteString.Char8 qualified as BS8
 import Data.Function ((&))
 import Data.Time (NominalDiffTime)
 import System.Directory (doesFileExist)
-import System.Process.Typed (createPipe, getStdout, nullStream, proc, setStdout, withProcessTerm)
+import System.Process.Typed (createPipe, getStdout, nullStream, proc, setStdout, withProcessTerm, withProcessTerm_, withProcessWait_)
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
 import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn)
@@ -16,19 +16,18 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  it "starts a devnet in < 1 second" $ failAfter 1 testStartsDevnet
+  it "starts a devnet in < 1 second" testStartsDevnetWithin1Second
   it "embeds a cardano-node" testCardanoNodeEmbed
 
--- FIXME: This test leaks cardano-node processes
-testStartsDevnet :: IO ()
-testStartsDevnet =
-  withProcessTerm cmd $ \p -> do
-    waitUntilReady p
+testStartsDevnetWithin1Second :: IO ()
+testStartsDevnetWithin1Second =
+  withProcessTerm_ cmd $ \p ->
+    failAfter 1 $ waitUntilReady p
  where
   waitUntilReady p = do
     t <- BS8.hGetLine (getStdout p)
     -- TODO: update to a better "ready" indicator
-    unless ("TraceAdoptedBlock" `BS8.isInfixOf` t) $
+    unless ("Producing blocks" `BS8.isInfixOf` t) $
       waitUntilReady p
 
   cmd =
