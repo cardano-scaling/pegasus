@@ -1,15 +1,18 @@
 module Main where
 
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.STM (atomically)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.ByteString (toStrict)
+import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Function ((&))
 import Data.Time (NominalDiffTime)
-import System.Directory (doesFileExist)
-import System.Process.Typed (createPipe, getStdout, nullStream, proc, setStdout, withProcessTerm, withProcessTerm_, withProcessWait_)
+import System.Process.Typed (ExitCode (..), byteStringOutput, createPipe, getStderr, getStdout, nullStream, runProcess_, setStderr, setStdout, shell, waitExitCode, withProcessTerm)
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
-import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn)
+import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn, shouldSatisfy)
 
 main :: IO ()
 main = hspec spec
@@ -18,10 +21,11 @@ spec :: Spec
 spec = do
   it "starts a devnet in < 1 second" testStartsDevnetWithin1Second
   it "embeds a cardano-node" testCardanoNodeEmbed
+  it "stops if cardano-node dies" testCardanoNodeDies
 
 testStartsDevnetWithin1Second :: IO ()
 testStartsDevnetWithin1Second =
-  withProcessTerm_ cmd $ \p ->
+  withProcessTerm cmd $ \p ->
     failAfter 1 $ waitUntilReady p
  where
   waitUntilReady p = do
@@ -31,13 +35,28 @@ testStartsDevnetWithin1Second =
       waitUntilReady p
 
   cmd =
-    proc "pegasus" []
+    shell "pegasus"
       & setStdout createPipe
 
 testCardanoNodeEmbed :: IO ()
 testCardanoNodeEmbed = do
-  withProcessTerm (proc "pegasus" [] & setStdout nullStream) $ \_ -> do
-    doesFileExist "tmp-pegasus/bin/cardano-node" `shouldReturn` True
+  withProcessTerm (shell "pegasus" & setStdout nullStream) $ \_ -> do
+    runProcess_ (shell "./tmp-pegasus/bin/cardano-node")
+
+testCardanoNodeDies :: IO ()
+testCardanoNodeDies = do
+  withProcessTerm cmd $ \p -> do
+    -- Give pegasus some time to start-up a node
+    threadDelay 100_000
+    runProcess_ (shell "pkill cardano-node")
+    waitExitCode p `shouldReturn` ExitFailure 1
+    err <- atomically (getStderr p)
+    toStrict err `shouldSatisfy` BS.isInfixOf "cardano-node exited"
+ where
+  cmd =
+    shell "pegasus"
+      & setStdout nullStream
+      & setStderr byteStringOutput
 
 -- * Helpers
 

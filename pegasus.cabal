@@ -90,6 +90,7 @@ test-suite integration
     , directory
     , hspec
     , HUnit
+    , stm
     , time
     , typed-process
 
