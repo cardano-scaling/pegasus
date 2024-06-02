@@ -2,14 +2,14 @@ module Main where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (atomically)
-import Control.Monad (unless)
+import Control.Monad (unless, void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (toStrict)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Function ((&))
 import Data.Time (NominalDiffTime)
-import System.Process.Typed (ExitCode (..), byteStringOutput, createPipe, getStderr, getStdout, nullStream, runProcess_, setStderr, setStdout, shell, waitExitCode, withProcessTerm)
+import System.Process.Typed (ExitCode (..), byteStringOutput, createPipe, getStderr, getStdout, nullStream, readProcess_, runProcess_, setStderr, setStdout, shell, waitExitCode, withProcessTerm)
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
 import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn, shouldSatisfy)
@@ -37,11 +37,19 @@ testStartsDevnetWithin1Second =
   cmd =
     shell "pegasus"
       & setStdout createPipe
+      & setStderr nullStream
 
 testCardanoNodeEmbed :: IO ()
 testCardanoNodeEmbed = do
-  withProcessTerm (shell "pegasus" & setStdout nullStream) $ \_ -> do
-    runProcess_ (shell "./tmp-pegasus/bin/cardano-node")
+  withProcessTerm cmd $ \_ -> do
+    -- Give pegasus some time to set-up a node
+    threadDelay 100_000
+    void $ readProcess_ (shell "./tmp-pegasus/bin/cardano-node --version")
+ where
+  cmd =
+    shell "pegasus"
+      & setStdout nullStream
+      & setStderr nullStream
 
 testCardanoNodeDies :: IO ()
 testCardanoNodeDies = do
