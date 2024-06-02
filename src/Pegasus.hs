@@ -3,6 +3,7 @@
 module Pegasus where
 
 import Cardano.Api (File (..), NetworkId (..), NetworkMagic (..), SocketPath)
+import Control.Concurrent.Async (race_)
 import Control.Exception (IOException, throwIO, try)
 import Control.Monad (unless, (>=>))
 import Data.Aeson (FromJSON, object, toJSON, (.=))
@@ -24,11 +25,12 @@ import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCar
 import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
+import System.Exit (die)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (BufferMode (NoBuffering), Handle, IOMode (AppendMode), hSetBuffering)
 import System.IO qualified
 import System.Posix (Handler (Catch), installHandler, ownerReadMode, setFileMode, sigTERM)
-import System.Process.Typed (setStdout, stopProcess, useHandleClose, withProcessWait)
+import System.Process.Typed (setStdout, stopProcess, useHandleClose, waitExitCode, withProcessWait)
 
 data RunningNode = RunningNode
   { nodeVersion :: Text
@@ -45,8 +47,8 @@ withCardanoNodeDevnet ::
   -- | Directory to persist logs and any state.
   FilePath ->
   -- | Callback when network started.
-  (RunningNode -> IO a) ->
-  IO a
+  (RunningNode -> IO ()) ->
+  IO ()
 withCardanoNodeDevnet dir cont = do
   cleanup
   instantiateCardanoNode
@@ -61,16 +63,16 @@ withCardanoNodeDevnet dir cont = do
             & setStdout (useHandleClose hLog)
     withProcessWait cmd $ \p -> do
       -- Ensure the sub-process is also stopped when we get asked to terminate.
-      -- FIXME: while this makes the cardano-node stop, we don't detect stopping of it
       _ <- installHandler sigTERM (Catch $ stopProcess p) Nothing
-      cont
-        RunningNode
-          { nodeVersion
-          , nodeSocket = File $ dir </> nodeSocket
-          , logFile
-          , networkId = Testnet (NetworkMagic 42) -- TODO: load this from config
-          , blockTime = 0.1 -- FIXME: query this
-          }
+      race_ (waitExitCode p >>= \ec -> die $ "cardano-node exited with: " <> show ec) $
+        cont
+          RunningNode
+            { nodeVersion
+            , nodeSocket = File $ dir </> nodeSocket
+            , logFile
+            , networkId = Testnet (NetworkMagic 42) -- TODO: load this from config
+            , blockTime = 0.1 -- FIXME: query this
+            }
  where
   binDir = dir </> "bin"
 
