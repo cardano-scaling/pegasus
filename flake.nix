@@ -23,6 +23,8 @@
           pkgs.lib.trivial.pipe (self.callCabal2nix "pegasus" ./. { }) [
             # Cardano-node to build against
             (pkgs.haskell.lib.compose.addBuildTool inputs.cardano-node.packages.${system}.cardano-node)
+            # Cardano-cli to build against
+            (pkgs.haskell.lib.compose.addBuildTool inputs.cardano-node.packages.${system}.cardano-cli)
             # Don't run (integration) tests
             pkgs.haskell.lib.compose.dontCheck
           ];

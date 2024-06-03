@@ -9,7 +9,24 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Function ((&))
 import Data.Time (NominalDiffTime)
-import System.Process.Typed (ExitCode (..), byteStringOutput, createPipe, getStderr, getStdout, nullStream, readProcess_, runProcess_, setStderr, setStdout, shell, waitExitCode, withProcessTerm)
+import Lens.Micro ((^?))
+import Lens.Micro.Aeson (key, _Number)
+import System.Process.Typed (
+  ExitCode (..),
+  byteStringOutput,
+  createPipe,
+  getStderr,
+  getStdout,
+  nullStream,
+  readProcessStdout_,
+  readProcess_,
+  runProcess_,
+  setStderr,
+  setStdout,
+  shell,
+  waitExitCode,
+  withProcessTerm,
+ )
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
 import Test.Hspec (HasCallStack, Spec, hspec, it, shouldReturn, shouldSatisfy)
@@ -25,8 +42,12 @@ spec = do
 
 testStartsDevnetWithin1Second :: IO ()
 testStartsDevnetWithin1Second =
-  withProcessTerm cmd $ \p ->
+  withProcessTerm cmd $ \p -> do
     failAfter 1 $ waitUntilReady p
+    b1 <- cliQueryBlock
+    threadDelay 100_000 -- TODO: configurable block time
+    b2 <- cliQueryBlock
+    b2 `shouldSatisfy` (> b1)
  where
   waitUntilReady p = do
     t <- BS8.hGetLine (getStdout p)
@@ -39,12 +60,17 @@ testStartsDevnetWithin1Second =
       & setStdout createPipe
       & setStderr nullStream
 
+  cliQueryBlock = do
+    out <- readProcessStdout_ (shell "./tmp-pegasus/bin/cardano-cli query tip --testnet-magic 42 --socket-path tmp-pegasus/node.socket")
+    pure $ out ^? key "block" . _Number
+
 testCardanoNodeEmbed :: IO ()
 testCardanoNodeEmbed = do
   withProcessTerm cmd $ \_ -> do
     -- Give pegasus some time to set-up a node
     threadDelay 100_000
     void $ readProcess_ (shell "./tmp-pegasus/bin/cardano-node --version")
+    void $ readProcess_ (shell "./tmp-pegasus/bin/cardano-cli --version")
  where
   cmd =
     shell "pegasus"

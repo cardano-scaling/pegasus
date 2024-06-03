@@ -21,8 +21,8 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Lens.Micro (at, (?~))
 import Lens.Micro.Aeson (_Object)
 import Paths_pegasus qualified as Pkg
-import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCardanoNodeArgs, getCardanoNodeVersion)
-import Pegasus.CardanoNode.Embed (writeCardanoNodeTo)
+import Pegasus.CardanoNode (CardanoNodeArgs (..), cardanoNodeProcess, defaultCardanoNodeArgs, getCardanoNodeVersion, waitForSocket)
+import Pegasus.Embed (writeCardanoCliTo, writeCardanoNodeTo)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, removeDirectoryRecursive)
 import System.Environment (getEnv, setEnv)
 import System.Exit (die)
@@ -64,11 +64,13 @@ withCardanoNodeDevnet dir cont = do
     withProcessWait cmd $ \p -> do
       -- Ensure the sub-process is also stopped when we get asked to terminate.
       _ <- installHandler sigTERM (Catch $ stopProcess p) Nothing
-      race_ (waitExitCode p >>= \ec -> die $ "cardano-node exited with: " <> show ec) $
+      race_ (waitExitCode p >>= \ec -> die $ "cardano-node exited with: " <> show ec) $ do
+        let socketPath = File $ dir </> nodeSocket
+        waitForSocket socketPath
         cont
           RunningNode
             { nodeVersion
-            , nodeSocket = File $ dir </> nodeSocket
+            , nodeSocket = socketPath
             , logFile
             , networkId = Testnet (NetworkMagic 42) -- TODO: load this from config
             , blockTime = 0.1 -- FIXME: query this
@@ -88,6 +90,8 @@ withCardanoNodeDevnet dir cont = do
   instantiateCardanoNode = do
     createDirectoryIfMissing True binDir
     writeCardanoNodeTo $ binDir </> "cardano-node"
+    -- TODO: make cli instantiation optional?
+    writeCardanoCliTo $ binDir </> "cardano-cli"
     -- NOTE: We put it into first position to ensure the cardano-node included
     -- is used (until users can pick one)
     getEnv "PATH" >>= \path -> setEnv "PATH" (binDir <> ":" <> path)

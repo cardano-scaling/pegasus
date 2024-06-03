@@ -1,10 +1,14 @@
 module Pegasus.CardanoNode where
 
+import Cardano.Api (SocketPath, unFile)
+import Control.Concurrent (threadDelay)
+import Control.Monad (unless)
 import Data.ByteString (toStrict)
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 import System.Process.Typed (ProcessConfig, proc, readProcessStdout_, setWorkingDir)
 
@@ -87,3 +91,11 @@ cardanoNodeProcess workingDir args =
     , nodeKesKeyFile
     , nodeVrfKeyFile
     } = args
+
+-- | Wait for the node socket file to become available.
+waitForSocket :: SocketPath -> IO ()
+waitForSocket socketPath = do
+  exists <- doesFileExist $ unFile socketPath
+  unless exists $ do
+    threadDelay 10_000
+    waitForSocket socketPath
