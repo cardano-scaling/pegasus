@@ -2,7 +2,7 @@ module Main where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
-import Pegasus (RunningNode (..), withCardanoNodeDevnet)
+import Pegasus (Devnet (..), withCardanoNodeDevnet)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import Text.Pretty.Simple (pPrint)
 

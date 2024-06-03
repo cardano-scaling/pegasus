@@ -32,7 +32,7 @@ import System.IO qualified
 import System.Posix (Handler (Catch), installHandler, ownerReadMode, setFileMode, sigTERM)
 import System.Process.Typed (setStdout, stopProcess, useHandleClose, waitExitCode, withProcessWait)
 
-data RunningNode = RunningNode
+data Devnet = Devnet
   { nodeVersion :: Text
   , nodeSocket :: SocketPath
   , logFile :: FilePath
@@ -47,7 +47,7 @@ withCardanoNodeDevnet ::
   -- | Directory to persist logs and any state.
   FilePath ->
   -- | Callback when network started.
-  (RunningNode -> IO ()) ->
+  (Devnet -> IO ()) ->
   IO ()
 withCardanoNodeDevnet dir cont = do
   cleanup
@@ -68,7 +68,7 @@ withCardanoNodeDevnet dir cont = do
         let socketPath = File $ dir </> nodeSocket
         waitForSocket socketPath
         cont
-          RunningNode
+          Devnet
             { nodeVersion
             , nodeSocket = socketPath
             , logFile
