@@ -18,6 +18,7 @@ import System.Process.Typed (
   getStderr,
   getStdout,
   nullStream,
+  proc,
   readProcessStdout_,
   readProcess_,
   runProcess_,
@@ -29,7 +30,7 @@ import System.Process.Typed (
  )
 import System.Timeout (timeout)
 import Test.HUnit (assertFailure)
-import Test.Hspec (HasCallStack, Spec, hspec, it, shouldNotBe, shouldReturn, shouldSatisfy)
+import Test.Hspec (HasCallStack, Spec, hspec, it, shouldBe, shouldReturn, shouldSatisfy)
 
 main :: IO ()
 main = hspec spec
@@ -51,18 +52,20 @@ testStartsDevnetWithin1Second =
     b2 `shouldSatisfy` (> b1)
     -- Devnet should contain some UTxO
     utxo <- cliQueryUTxOList
-    utxo `shouldNotBe` []
+    length utxo `shouldBe` nWallets + 1
  where
+  nWallets = 2
+
+  cmd =
+    proc "pegasus" ["--wallets", show nWallets]
+      & setStdout createPipe
+      & setStderr nullStream
+
   waitUntilReady p = do
     t <- BS8.hGetLine (getStdout p)
     -- TODO: update to a better "ready" indicator
     unless ("Producing blocks" `BS8.isInfixOf` t) $
       waitUntilReady p
-
-  cmd =
-    shell "pegasus"
-      & setStdout createPipe
-      & setStderr nullStream
 
   cliQueryBlock = do
     out <- readProcessStdout_ (shell "./tmp-pegasus/bin/cardano-cli query tip --testnet-magic 42 --socket-path tmp-pegasus/node.socket")
