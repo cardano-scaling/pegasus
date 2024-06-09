@@ -2,11 +2,17 @@
 
 module Pegasus where
 
-import Cardano.Api (File (..), NetworkId (..), NetworkMagic (..), SocketPath)
+-- TODO: not re-exported by cardano-api nor cardano-ledger-api!?
+import Cardano.Ledger.Coin (Coin)
+
+-- TODO: explicit imports
+import Cardano.Api
+import Cardano.Api.Shelley
+
 import Control.Concurrent.Async (race_)
 import Control.Exception (IOException, throwIO, try)
 import Control.Monad (unless, (>=>))
-import Data.Aeson (FromJSON, object, toJSON, (.=))
+import Data.Aeson (object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -179,6 +185,76 @@ setupCardanoDevnet dir = do
     Aeson.encodeFile (dir </> nodeConfigFile args) config
 
   atKey i = _Object . at i
+
+-- | A seeded and usable wallet that will be pretty printed.
+data Wallet = Wallet
+  { signingKey :: SigningKey PaymentKey
+  , address :: Address ShelleyAddr
+  }
+  deriving (Show)
+
+-- | Distribute initial funds using a genesis transaction. That way, indexers
+-- will be able to pick up the seeded funds (which is not always the case wiht
+-- 'initialFunds' of the shelley genesis config).
+seedDevnet :: Devnet -> IO [Wallet]
+seedDevnet = undefined
+
+-- | Create a genesis transaction using given 'initialFunds' key and amount.
+-- NOTE: This function errors if the constructed transaction body is invalid.
+mkGenesisTx ::
+  IsShelleyBasedEra era =>
+  NetworkId ->
+  -- | Owner of the 'initialFunds' to use.
+  SigningKey GenesisUTxOKey ->
+  -- | Starting amount of 'initialFunds'.
+  Coin ->
+  -- | Recipients and amounts to pay in this transaction.
+  [(VerificationKey PaymentKey, Coin)] ->
+  Tx era
+mkGenesisTx networkId genesisKey initialAmount recipients =
+  case createAndValidateTransactionBody sbe body of
+    Left err -> error $ "Failed to build genesis transaction: " <> show err
+    Right txbody -> signShelleyTransaction sbe txbody [WitnessPaymentKey paymentKey]
+ where
+  sbe = shelleyBasedEra
+
+  paymentKey = castSigningKey genesisKey
+
+  body =
+    defaultTxBodyContent sbe
+      & addTxIn (initialInput, BuildTxWith $ KeyWitness KeyWitnessForSpending)
+      & setTxOuts (recipientOutputs <> [changeOutput])
+
+  initialInput =
+    genesisUTxOPseudoTxIn
+      networkId
+      (verificationKeyHash $ getVerificationKey genesisKey)
+
+  totalSent = foldMap snd recipients
+
+  changeAddr = mkVkAddress (getVerificationKey paymentKey)
+
+  changeOutput =
+    TxOut
+      changeAddr
+      (lovelaceToTxOutValue sbe $ initialAmount - totalSent)
+      TxOutDatumNone
+      ReferenceScriptNone
+
+  recipientOutputs =
+    flip map recipients $ \(vk, ll) ->
+      TxOut
+        (mkVkAddress vk)
+        (lovelaceToTxOutValue sbe ll)
+        TxOutDatumNone
+        ReferenceScriptNone
+
+  mkVkAddress vk =
+    makeShelleyAddressInEra
+      sbe
+      networkId
+      (PaymentCredentialByKey $ verificationKeyHash vk)
+      NoStakeAddress
 
 -- * Helpers
 

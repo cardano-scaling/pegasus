@@ -73,6 +73,7 @@ testStartsDevnetWithin1Second =
 
   cliQueryUTxOList = do
     out <- readProcessStdout_ (shell "./tmp-pegasus/bin/cardano-cli query utxo --whole-utxo --output-json --testnet-magic 42 --socket-path tmp-pegasus/node.socket")
+    print out
     pure $ out ^.. members
 
 testCardanoNodeEmbed :: IO ()

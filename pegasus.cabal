@@ -53,9 +53,10 @@ library
   build-depends:
     , aeson
     , async
-    , base              ^>=4.18.1.0
+    , base                 ^>=4.18.1.0
     , bytestring
     , cardano-api
+    , cardano-ledger-core
     , directory
     , file-embed
     , filepath
