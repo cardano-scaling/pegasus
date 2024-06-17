@@ -38,12 +38,17 @@
 
       devShells.default = hsPkgs.shellFor {
         packages = p: [ p.pegasus ];
+
+        # XXX: Does not include some packages?
         withHoogle = true;
+
         buildInputs = [
           pkgs.cabal-install
-          pkgs.haskell.packages.ghc96.haskell-language-server
-          pkgs.haskell.packages.ghc96.fourmolu
-          pkgs.haskell.packages.ghc96.cabal-fmt
+          pkgs.haskellPackages.fourmolu
+          pkgs.haskellPackages.cabal-fmt
+          # Needs to be using the same GHC as the project
+          # XXX: GHC version defined by horizon-cardano
+          pkgs.haskell.packages.ghc963.haskell-language-server
         ];
       };
 

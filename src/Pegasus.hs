@@ -2,13 +2,54 @@
 
 module Pegasus where
 
--- TODO: not re-exported by cardano-api nor cardano-ledger-api!?
-import Cardano.Ledger.Coin (Coin)
-
--- TODO: explicit imports
-import Cardano.Api
-import Cardano.Api.Shelley
-
+import Cardano.Api (
+  Address,
+  AsType (AsGenesisUTxOKey),
+  BabbageEra,
+  BuildTxWith (BuildTxWith),
+  ConsensusModeParams (CardanoModeParams),
+  EpochSlots (EpochSlots),
+  File (File),
+  FromJSON,
+  GenesisUTxOKey,
+  IsShelleyBasedEra (..),
+  Key (
+    SigningKey,
+    VerificationKey,
+    deterministicSigningKey,
+    getVerificationKey,
+    verificationKeyHash
+  ),
+  KeyWitnessInCtx (KeyWitnessForSpending),
+  LocalNodeConnectInfo (LocalNodeConnectInfo),
+  NetworkId (Testnet),
+  NetworkMagic (NetworkMagic),
+  PaymentCredential (PaymentCredentialByKey),
+  PaymentKey,
+  ShelleyAddr,
+  ShelleyWitnessSigningKey (WitnessPaymentKey),
+  SocketPath,
+  StakeAddressReference (NoStakeAddress),
+  SubmitResult (SubmitFail, SubmitSuccess),
+  Tx,
+  TxFee (TxFeeExplicit),
+  TxInMode (TxInMode),
+  TxOut (TxOut),
+  TxOutDatum (TxOutDatumNone),
+  Witness (KeyWitness),
+  addTxIn,
+  castSigningKey,
+  createAndValidateTransactionBody,
+  defaultTxBodyContent,
+  genesisUTxOPseudoTxIn,
+  lovelaceToTxOutValue,
+  makeShelleyAddressInEra,
+  setTxOuts,
+  signShelleyTransaction,
+  submitTxToNodeLocal,
+ )
+import Cardano.Crypto.Hash (SHA256, digest)
+import Cardano.Crypto.Seed (mkSeedFromBytes)
 import Control.Concurrent.Async (race_)
 import Control.Exception (IOException, throwIO, try)
 import Control.Monad (unless, (>=>))
@@ -20,6 +61,7 @@ import Data.FileEmbed (embedFile)
 import Data.Foldable (for_)
 import Data.Function ((&))
 import Data.Functor ((<&>))
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (NominalDiffTime, getCurrentTime)
@@ -37,6 +79,12 @@ import System.IO (BufferMode (NoBuffering), Handle, IOMode (AppendMode), hSetBuf
 import System.IO qualified
 import System.Posix (Handler (Catch), installHandler, ownerReadMode, setFileMode, sigTERM)
 import System.Process.Typed (setStdout, stopProcess, useHandleClose, waitExitCode, withProcessWait)
+
+-- TODO: not re-exported by cardano-api nor cardano-ledger-api!?
+import Cardano.Ledger.Coin (Coin (..))
+
+-- XXX: Should be available on Cardano.Api
+import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone), serialiseToRawBytesHex, setTxFee)
 
 data Devnet = Devnet
   { nodeVersion :: Text
@@ -194,10 +242,27 @@ data Wallet = Wallet
   deriving (Show)
 
 -- | Distribute initial funds using a genesis transaction. That way, indexers
--- will be able to pick up the seeded funds (which is not always the case wiht
+-- will be able to pick up the seeded funds (which is not always the case with
 -- 'initialFunds' of the shelley genesis config).
 seedDevnet :: Devnet -> IO [Wallet]
-seedDevnet = undefined
+seedDevnet devnet =
+  submitTxToNodeLocal localNodeConnectInfo txInMode >>= \case
+    SubmitSuccess ->
+      pure []
+    SubmitFail e ->
+      die $ "Failed to submit seeding transaction: " <> show e
+ where
+  localNodeConnectInfo = LocalNodeConnectInfo cardanoModeParams networkId nodeSocket
+
+  cardanoModeParams = CardanoModeParams (EpochSlots byronEpochSlots)
+
+  byronEpochSlots = 21600
+
+  txInMode = TxInMode shelleyBasedEra tx
+
+  tx = mkGenesisTx @BabbageEra networkId faucetGenesisKey faucetAmount []
+
+  Devnet{networkId, nodeSocket} = devnet
 
 -- | Create a genesis transaction using given 'initialFunds' key and amount.
 -- NOTE: This function errors if the constructed transaction body is invalid.
@@ -224,6 +289,10 @@ mkGenesisTx networkId genesisKey initialAmount recipients =
     defaultTxBodyContent sbe
       & addTxIn (initialInput, BuildTxWith $ KeyWitness KeyWitnessForSpending)
       & setTxOuts (recipientOutputs <> [changeOutput])
+      & setTxFee (TxFeeExplicit sbe fee)
+
+  -- NOTE: Slighly over-pay to not need full fee calculation using parameters
+  fee = Coin 170000
 
   initialInput =
     genesisUTxOPseudoTxIn
@@ -237,7 +306,7 @@ mkGenesisTx networkId genesisKey initialAmount recipients =
   changeOutput =
     TxOut
       changeAddr
-      (lovelaceToTxOutValue sbe $ initialAmount - totalSent)
+      (lovelaceToTxOutValue sbe $ initialAmount - totalSent - fee)
       TxOutDatumNone
       ReferenceScriptNone
 
@@ -255,6 +324,28 @@ mkGenesisTx networkId genesisKey initialAmount recipients =
       networkId
       (PaymentCredentialByKey $ verificationKeyHash vk)
       NoStakeAddress
+
+-- * Fixtures
+
+faucetGenesisKey :: SigningKey GenesisUTxOKey
+faucetGenesisKey =
+  deterministicSigningKey AsGenesisUTxOKey seed
+ where
+  seed = mkSeedFromBytes $ digest (Proxy @SHA256) "faucet"
+
+-- NOTE: Needs to match initialFunds in genesis-shelley.json
+faucetAddress :: ByteString
+faucetAddress =
+  serialiseToRawBytesHex $
+    makeShelleyAddressInEra
+      (shelleyBasedEra @BabbageEra)
+      (Testnet (NetworkMagic 42))
+      (PaymentCredentialByKey $ verificationKeyHash $ getVerificationKey $ castSigningKey faucetGenesisKey)
+      NoStakeAddress
+
+-- NOTE: Needs to match initialFunds in genesis-shelley.json
+faucetAmount :: Coin
+faucetAmount = 900000000000
 
 -- * Helpers
 
