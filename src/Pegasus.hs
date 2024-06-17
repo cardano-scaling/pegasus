@@ -3,8 +3,8 @@
 module Pegasus where
 
 import Cardano.Api (
-  Address,
-  AsType (AsGenesisUTxOKey),
+  AddressInEra,
+  AsType (AsGenesisUTxOKey, AsPaymentKey),
   BabbageEra,
   BuildTxWith (BuildTxWith),
   ConsensusModeParams (CardanoModeParams),
@@ -26,7 +26,7 @@ import Cardano.Api (
   NetworkMagic (NetworkMagic),
   PaymentCredential (PaymentCredentialByKey),
   PaymentKey,
-  ShelleyAddr,
+  SerialiseAddress (serialiseAddress),
   ShelleyWitnessSigningKey (WitnessPaymentKey),
   SocketPath,
   StakeAddressReference (NoStakeAddress),
@@ -41,6 +41,7 @@ import Cardano.Api (
   castSigningKey,
   createAndValidateTransactionBody,
   defaultTxBodyContent,
+  deterministicSigningKeySeedSize,
   genesisUTxOPseudoTxIn,
   lovelaceToTxOutValue,
   makeShelleyAddressInEra,
@@ -85,6 +86,7 @@ import Cardano.Ledger.Coin (Coin (..))
 
 -- XXX: Should be available on Cardano.Api
 import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone), serialiseToRawBytesHex, setTxFee)
+import Data.Word (Word8)
 
 data Devnet = Devnet
   { nodeVersion :: Text
@@ -237,21 +239,27 @@ setupCardanoDevnet dir = do
 -- | A seeded and usable wallet that will be pretty printed.
 data Wallet = Wallet
   { signingKey :: SigningKey PaymentKey
-  , address :: Address ShelleyAddr
+  , address :: Text
   }
   deriving (Show)
 
 -- | Distribute initial funds using a genesis transaction. That way, indexers
 -- will be able to pick up the seeded funds (which is not always the case with
--- 'initialFunds' of the shelley genesis config).
-seedDevnet :: Devnet -> IO [Wallet]
-seedDevnet devnet =
+-- 'initialFunds' of the shelley genesis config). Each wallet is seeded with
+-- 1000 ADA.
+seedDevnet :: Devnet -> Word8 -> IO [Wallet]
+seedDevnet devnet nWallets =
   submitTxToNodeLocal localNodeConnectInfo txInMode >>= \case
     SubmitSuccess ->
-      pure []
+      pure wallets
     SubmitFail e ->
       die $ "Failed to submit seeding transaction: " <> show e
  where
+  wallets = map (seedWallet networkId) [1 .. nWallets]
+
+  walletAmount Wallet{signingKey} =
+    (getVerificationKey signingKey, Coin 1_000_000_000)
+
   localNodeConnectInfo = LocalNodeConnectInfo cardanoModeParams networkId nodeSocket
 
   cardanoModeParams = CardanoModeParams (EpochSlots byronEpochSlots)
@@ -260,9 +268,23 @@ seedDevnet devnet =
 
   txInMode = TxInMode shelleyBasedEra tx
 
-  tx = mkGenesisTx @BabbageEra networkId faucetGenesisKey faucetAmount []
+  tx =
+    mkGenesisTx @BabbageEra networkId faucetGenesisKey faucetAmount $
+      map walletAmount wallets
 
   Devnet{networkId, nodeSocket} = devnet
+
+-- | Deterministically create a wallet signing key from a number.
+seedWallet :: NetworkId -> Word8 -> Wallet
+seedWallet networkId seedWord =
+  Wallet
+    { signingKey
+    , address = serialiseAddress $ mkVkAddress @BabbageEra networkId $ getVerificationKey signingKey
+    }
+ where
+  signingKey = deterministicSigningKey AsPaymentKey $ mkSeedFromBytes seedBytes
+
+  seedBytes = BS.replicate (fromIntegral $ deterministicSigningKeySeedSize AsPaymentKey) seedWord
 
 -- | Create a genesis transaction using given 'initialFunds' key and amount.
 -- NOTE: This function errors if the constructed transaction body is invalid.
@@ -301,7 +323,7 @@ mkGenesisTx networkId genesisKey initialAmount recipients =
 
   totalSent = foldMap snd recipients
 
-  changeAddr = mkVkAddress (getVerificationKey paymentKey)
+  changeAddr = mkVkAddress networkId (getVerificationKey paymentKey)
 
   changeOutput =
     TxOut
@@ -313,17 +335,19 @@ mkGenesisTx networkId genesisKey initialAmount recipients =
   recipientOutputs =
     flip map recipients $ \(vk, ll) ->
       TxOut
-        (mkVkAddress vk)
+        (mkVkAddress networkId vk)
         (lovelaceToTxOutValue sbe ll)
         TxOutDatumNone
         ReferenceScriptNone
 
-  mkVkAddress vk =
-    makeShelleyAddressInEra
-      sbe
-      networkId
-      (PaymentCredentialByKey $ verificationKeyHash vk)
-      NoStakeAddress
+-- | Get the unstaked address of given verification key on given network.
+mkVkAddress :: IsShelleyBasedEra era => NetworkId -> VerificationKey PaymentKey -> AddressInEra era
+mkVkAddress networkId vk =
+  makeShelleyAddressInEra
+    shelleyBasedEra
+    networkId
+    (PaymentCredentialByKey $ verificationKeyHash vk)
+    NoStakeAddress
 
 -- * Fixtures
 

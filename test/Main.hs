@@ -52,9 +52,9 @@ testStartsDevnetWithin1Second =
     b2 `shouldSatisfy` (> b1)
     -- Devnet should contain some UTxO
     utxo <- cliQueryUTxOList
-    length utxo `shouldBe` nWallets + 1
+    length utxo `shouldBe` nWallets + 2 -- faucet + pool
  where
-  nWallets = 2
+  nWallets = 3
 
   cmd =
     proc "pegasus" ["--wallets", show nWallets]
@@ -73,7 +73,6 @@ testStartsDevnetWithin1Second =
 
   cliQueryUTxOList = do
     out <- readProcessStdout_ (shell "./tmp-pegasus/bin/cardano-cli query utxo --whole-utxo --output-json --testnet-magic 42 --socket-path tmp-pegasus/node.socket")
-    print out
     pure $ out ^.. members
 
 testCardanoNodeEmbed :: IO ()

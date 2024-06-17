@@ -13,7 +13,7 @@ main = do
   withCardanoNodeDevnet "tmp-pegasus" $ \devnet -> do
     pPrint devnet
     putStrLn "Seeding wallets"
-    wallets <- seedDevnet devnet
+    wallets <- seedDevnet devnet 3
     pPrint wallets
     putStrLn "Producing blocks"
     forever $ do
